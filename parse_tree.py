@@ -14,7 +14,8 @@ class TreeNode:
 
 def parse_trees(file_path):
   """
-  Parses JSON encoded dateset stored at filepath and returns a list of trees.
+  Parses JSON encoded dateset stored at filepath 
+  and returns a list of trees.
   """
   trees_json = []
   with open(file_path, 'r') as file:
@@ -31,28 +32,11 @@ def parse_tree(tree_json):
   """
   Parses a JSON encoded object from the EntailmentBank dataset
   into a tree with id and value (sentence).
-
-  The tree structure is encoded in tree_json["meta"]["lisp_proof"]
-
-  E.g. "((((sent1 sent3) -> int1) sent2) -> int2)"
-
-  is parsed into the following tree:
-
-  int2
-  |
-  └── sent2
-      |
-      └── int1
-          |
-          ├── sent1
-          └── sent3
   """
 
-  def parse_helper(tokens, id_to_sentence, start, end):
+  def parse_root(tokens, id_to_sentence, start, end):
     """
     Must have a single root node.
-
-    String looks like "((((sent1 sent3) -> int1) sent2) -> int2)"
     """
     id = tokens[end - 1]
     root = TreeNode(id, id_to_sentence[id])
@@ -62,10 +46,7 @@ def parse_tree(tree_json):
 
   def parse_children(tokens, id_to_sentence, start, end):
     """
-    Parses the children into an array.
-    Implemented using a stack.
-
-    String looks like "(((sent1 sent3) -> int1) sent2)"
+    Parses children into an array.
     """
     children = []
 
@@ -79,7 +60,8 @@ def parse_tree(tree_json):
       # Case 2: recursive case
       else:
         j = find_matching_parenthesis(tokens, i)
-        children.append(parse_helper(tokens, id_to_sentence, i, j))
+        child = parse_root(tokens, id_to_sentence, i, j)
+        children.append(child)
         i = j
 
       i += 1
@@ -101,9 +83,6 @@ def parse_tree(tree_json):
     """
     Extracts sentences from tree json from dataset.
     Each sentences corresponds to an id.
-
-    Initial premises are stored in "triples", while
-    Intermediate premises are stored in "intermediate_conclusions"
     """
     return {
         **tree_json["meta"]["triples"],
@@ -114,7 +93,7 @@ def parse_tree(tree_json):
 
   tree_string = tree_json["meta"]["lisp_proof"]
   tokens = tree_string.replace('(', ' ( ').replace(')', ' ) ').split()
-  return parse_helper(tokens, id_to_sentence, 0, len(tokens) - 1)
+  return parse_root(tokens, id_to_sentence, 0, len(tokens) - 1)
 
 
 def print_tree(node, depth=0):
