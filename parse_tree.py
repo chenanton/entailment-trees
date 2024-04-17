@@ -24,25 +24,58 @@ def parse_tree_string(tree_string):
   """
 
   def parse_helper(tokens, start, end):
-    res = []
+    """
+    Must have a single root node.
 
-    # Case 1
-    if end - 3 >= 0 and tokens[end - 3] != '->':
-      parse_children(tokens, start + 1, end - 1)
-    else:
-      node = TreeNode(tokens[end - 1])
+    String looks like "((((sent1 sent3) -> int1) sent2) -> int2)"
+    """
+    root = TreeNode(tokens[end - 1])
+    root.children = parse_children(tokens, start + 1, end - 3)
 
-    # initialize pointer at start
+    return root
 
-    # repeat:
-    # 1. find letnod
+  def parse_children(tokens, start, end):
+    """
+    Parses the children into an array.
+    Implemented using a stack.
+
+    String looks like "(((sent1 sent3) -> int1) sent2)"
+    """
+    children = []
+
+    i = start + 1
+
+    while i < end:
+      # Case 1: base case (leaf node)
+      if tokens[i] != "(":
+        children.append(TreeNode(tokens[i]))
+      # Case 2: recursive case
+      else:
+        j = find_matching_parenthesis(tokens, i)
+        children.append(parse_helper(tokens, i, j))
+        i = j
+
+      i += 1
+
+    return children
+
+  def find_matching_parenthesis(tokens, left_index):
+    left_count = 0
+    for i in range(left_index, len(tokens)):
+      if tokens[i] == '(':
+        left_count += 1
+      elif tokens[i] == ')':
+        left_count -= 1
+        if left_count == 0:
+          return i
+    return -1  # No matching right parenthesis found
 
   tokens = tree_string.replace('(', ' ( ').replace(')', ' ) ').split()
-  print(tokens)
   return parse_helper(tokens, 0, len(tokens) - 1)
 
 
-if __name__ == "__main__":
-  tree_string = "((((sent1 sent3) -> int1) sent2) -> int2)"
-  tree = parse_tree_string(tree_string)
-  print_tree(tree)
+def print_tree(node, depth=0):
+  if node is not None:
+    print("  " * depth + node.id)
+    for child in node.children:
+      print_tree(child, depth + 1)
