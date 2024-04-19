@@ -1,3 +1,4 @@
+import torch
 from treenode import TreeNode
 from embed import sentence_to_vec
 
@@ -68,7 +69,7 @@ class EntailmentTree:
 
     # Construct available premises per iteration
     ids = [get_initial_premises(self.root)]
-    for t in range(len(ids_g)):
+    for t in range(len(ids_g) - 1):
       ids.append(ids[-1].copy())
 
       # Remove retrieved premises
@@ -117,15 +118,32 @@ class EntailmentTree:
 
     return retrieved_helper(self.root)
 
-  def _to_embedding(self, ids):
+  def to_embedding(self, ids):
     """
     Given a list of m lists of m_i IDs,
     returns an list of m_i x d torch tensor of embeddings.
 
+    The embedding for an ID is stored in the 
+    dictionary self.id_to_embedding
+
+    e.g. self.id_to_embedding[id]
+    returns a d-dimensional embedding.
+
     e.g. [[id1 id2] [id3 id4 id5]] -> [tensor1 tensor2]
     where tensor1 is 2 x d and tensor2 is 3 x d.
     """
-    pass
+    embeddings_list = []
+
+    for id_list in ids:
+      tensor_list = []
+
+      for id in id_list:
+        embedding = self.id_to_embedding[id]
+        tensor_list.append(embedding)
+
+      embeddings_list.append(torch.stack(tensor_list))
+
+    return embeddings_list
 
   def _parse_sentences(self, tree_json):
     """
