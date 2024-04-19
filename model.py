@@ -16,14 +16,16 @@ def model(Y, s0):
   s0:         input set of premises to construct a tree off of.
   n:          number of samples in dataset.
   l (lambda): rate parameter for k_i.
-  w:          parameter for linear model.
+  wr:         parameters for linear premise retrieval.
+  wg:         parameters for linear premise generation.
   c:          available premises.
   c_tilde:    retrieved premises.
 
   """
   n = len(Y)
   l = pyro.sample("lambda", dist.Exponential(torch.tensor([1])))
-  w = pyro.sample("W", dist.Normal(torch.tensor([1])))
+  wr = pyro.sample("W", dist.Normal(torch.tensor([1])))
+  wg = pyro.sample("W", dist.Normal(torch.tensor([1])))
   s2 = pyro.sample("sigmasquare", dist.Exponential(torch.tensor([1])))
 
   for i in range(n):
