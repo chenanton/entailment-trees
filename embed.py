@@ -1,7 +1,7 @@
 from sentence_transformers import SentenceTransformer
 
 
-def sentence_to_vec(sentence, model_name='paraphrase-distilroberta-base-v1'):
+def sentence_to_vec(sentence, model_name='all-MiniLM-L6-v2'):
   model = SentenceTransformer(model_name)
   embeddings = model.encode(sentence, convert_to_tensor=True)
 

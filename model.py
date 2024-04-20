@@ -27,7 +27,7 @@ def model(Y):
   Future work: vectorize implementation with pyro.plate.
   """
   n = len(Y)
-  d = 768
+  d = 384
 
   # Model parameter priors
   p, wr, wg, s2 = sample_model_params(d)
