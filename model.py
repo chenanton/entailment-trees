@@ -88,10 +88,10 @@ def sample_model_params(d):
 
   :param d: embedding dimension.
 
-  :return l: lambda
-  :return wr: W_retrieved
-  :return wg: W_generated
-  :return s2: sigma^2
+  :return p: binomial parameter.
+  :return wr: normal parameter.
+  :return wg: normal parameter.
+  :return s2: normal parameter.
   """
   p = pyro.sample(
       "p",
