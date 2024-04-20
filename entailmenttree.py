@@ -118,6 +118,29 @@ class EntailmentTree:
 
     return retrieved_helper(self.root)
 
+  def get_indices_of_retrieved_premises(self):
+    """
+    Returns the indices of each retrieved premise
+    w.r.t. the available premises for each iteration.
+
+    :return indices: T-long list,
+    where T is the number of iterations.
+
+    e.g. if ids_r = [[1, 4, 6], [1, 2]]
+    and ids_a = [[1, 2, 3, 4, 5, 6], [0, 1 ,2]]
+
+    then indices = [[0, 3, 5], [1, 2]]
+    """
+
+    ids_r = self.retrieved_premises()
+    ids_a = self.available_premises()
+
+    indices = []
+    for r, a in zip(ids_r, ids_a):
+      indices.append(torch.tensor([a.index(id) for id in r if id in a]))
+
+    return indices
+
   def to_embedding(self, ids):
     """
     Given a list of m lists of m_i IDs,
