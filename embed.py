@@ -1,5 +1,8 @@
 from sentence_transformers import SentenceTransformer
 
+# Embedding size
+d = 384
+
 
 def sentence_to_vec(sentence, model_name='all-MiniLM-L6-v2'):
   model = SentenceTransformer(model_name)

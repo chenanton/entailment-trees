@@ -2,14 +2,16 @@ import torch
 import pyro
 import pyro.distributions as dist
 
+from embed import d
 
-def model(Y):
+
+def model(Y, c_test):
   """
   Probability model for entailments trees.
 
   Inputs:
   Y:       input dataset of entailment trees.
-  c0:      input set of premises to construct a tree off of (latent).
+  c_test:  input set of premises to sample a new premise from.
 
   Parameters:
   p:       p; binom parameter for k_i.
@@ -24,10 +26,13 @@ def model(Y):
   c_star:  generated premises.
   n:       number of samples in dataset.
 
+  Returns:
+  c_tilde_test: retrieved premise.
+  c_star_test: generated premise.
+
   Future work: vectorize implementation with pyro.plate.
   """
   n = len(Y)
-  d = 384
 
   # Model parameter priors
   p, wr, wg, s2 = sample_model_params(d)
@@ -52,15 +57,22 @@ def model(Y):
     # 2. Sample data
 
     # Sample for number of retrieved premises
-    pyro.sample(
-        f"k_{i}",
-        dist.Binomial(torch.tensor(m) - 1,
-                      torch.ones_like(k) * p),
-        obs=k - 1,
-    )
+    with pyro.plate(f"k_{i}", len(m)):
+      pyro.sample(
+          f"k_{i}^t",
+          dist.Binomial(m - 1, p),
+          obs=k - 1,
+      )
 
     # Sample for retrieved premises
-    theta = compute_theta(c, wr, k, c_tilde_indices)
+    theta = compute_theta(c, wr, k)
+
+    # Construct theta for distinct sampling
+    theta = [theta[t].repeat(1, k[t]) for t in range(len(theta))]
+    for t in range(len(k)):  # iteration
+      for j in range(k[t] - 1):  # sample number
+        theta[t][c_tilde_indices[t][j], j + 1:] = 0
+
     for t in range(len(k)):  # iteration
       for j in range(k[t]):  # sample number
         # Sample then update theta
@@ -75,11 +87,43 @@ def model(Y):
     for t in range(len(c_tilde)):  # iteration
       # Compute normal model parameters
       mean_c_tilde_t = torch.mean(c_tilde[t], dim=0, keepdim=True)
-      mu_t = torch.matmul(wg, mean_c_tilde_t.T)
+      mu_t = torch.matmul(wg, mean_c_tilde_t.T).squeeze()
+      c_star_t = c_star[t].squeeze()
 
       pyro.sample(f"c_star,{i}^({t})",
                   dist.MultivariateNormal(mu_t, Sigma),
-                  obs=c_star[t])
+                  obs=c_star_t)
+
+  # 3. Sample new premise
+  m_test = c_test.shape[0]
+
+  # Number of samples to consider
+  # k_test = pyro.sample(
+  #     "k_test",
+  #     dist.Binomial(torch.tensor([m_test]), torch.tensor([p])),
+  # ) + 1
+  k_test = 2  # TEMPORARY
+
+  # Retrieve samples
+  theta_test = compute_theta([c_test], wr, torch.tensor([k_test]))[0].squeeze()
+  j_test = []
+  for j in range(k_test):
+    # Sample then update theta
+    idx = pyro.sample(f"j_test,{j}^(0)", dist.Categorical(theta_test))
+    j_test.append(idx)
+    theta_test[idx] = 0.0
+
+  c_tilde_test = c_test[j_test, :]
+
+  # Sample new premise
+  mean_c_test_tilde = torch.mean(c_tilde_test, dim=0, keepdim=True)
+  mu_t = torch.matmul(wg, mean_c_test_tilde.T).squeeze()
+  c_star_test = pyro.sample(
+      f"c_star_test",
+      dist.MultivariateNormal(mu_t, Sigma),
+  )
+
+  return c_star_test, c_tilde_test
 
 
 def sample_model_params(d):
@@ -98,20 +142,25 @@ def sample_model_params(d):
       dist.Uniform(torch.tensor([0.0]), torch.tensor([1.0])),
   )
 
-  wr = pyro.sample(
-      "W_retrieved",
-      dist.Normal(torch.zeros(d, d), torch.ones(d, d)),
+  with pyro.plate("wr", d * d):
+    wr = pyro.sample("wr_entries",
+                     dist.Normal(torch.tensor([0.0]), torch.tensor([1.0])))
+  wr = wr.reshape(d, d)
+
+  with pyro.plate("wg", d * d):
+    wg = pyro.sample("wg_entries",
+                     dist.Normal(torch.tensor([0.0]), torch.tensor([1.0])))
+  wg = wg.reshape(d, d)
+
+  s2 = pyro.sample(
+      "sigmasquare",
+      dist.Exponential(torch.tensor([1.0])),
   )
-  wg = pyro.sample(
-      "W_generated",
-      dist.Normal(torch.zeros(d, d), torch.ones(d, d)),
-  )
-  s2 = pyro.sample("sigmasquare", dist.Exponential(torch.tensor([1.0])))
 
   return p, wr, wg, s2
 
 
-def compute_theta(c, wr, k, c_tilde_indices):
+def compute_theta(c, wr, k):
   """
   Construct evolved categorical distributions
   of retrieval probability for available premises.
@@ -130,14 +179,6 @@ def compute_theta(c, wr, k, c_tilde_indices):
   psi_exp_sum = [torch.sum(p_exp) for p_exp in psi_exp]
 
   theta = [psi_exp[t] / psi_exp_sum[t] for t in range(len(psis))]
-
-  # Construct evolved distributions
-  theta = [theta[t].repeat(1, k[t]) for t in range(len(theta))]
-
-  for t in range(len(k)):  # iteration
-    for j in range(k[t] - 1):  # sample number
-      theta[t][c_tilde_indices[t][j], j + 1:] = 0
-
   return theta
 
 
@@ -150,6 +191,7 @@ def psi(c, wr):
   :param wr: model parameters for retrieval, d x d tensor.
   """
   mean_c = torch.mean(c, dim=0, keepdim=True)
-  scores = torch.matmul(torch.matmul(c, wr), mean_c.T)
+  cTwr = torch.matmul(c, wr)
+  scores = torch.matmul(cTwr, mean_c.T)
 
   return scores
